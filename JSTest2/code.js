@@ -1,77 +1,146 @@
-var button = document.getElementById("button");
-var text = document.getElementById("demo");
 var canvas = document.getElementById("canvas");
-
 var ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-button.addEventListener('click', function() {
-  text.style.color = "red";
-});
-//Planck.js stuff
-var pl = planck, Vec2 = pl.Vec2;
+//document.addEventListener('mousemove', onMouseMove);
+addEventListener('mousedown', mouseDownHandler);  
+addEventListener('mouseup', mouseUpHandler);
 
-function update() {
-  world.step(1/30);
-}
+var button = document.getElementById("button");
 
-var world = pl.World(Vec2(0, 1));
+var text = document.getElementById("demo");
+var bbp = text.getBoundingClientRect();
+var words = text.textContent.split(' ');
+// get the length of a space {
+  // Create a span with just a space
+  const spaceSpan = document.createElement("span");
+  spaceSpan.textContent = " ";
+
+  // Append to body so it's visible 
+  document.body.appendChild(spaceSpan);
+
+  // Measure width
+  const spaceWidth = spaceSpan.getBoundingClientRect().width;
+
+  // Remove span after use
+  spaceSpan.remove();
+//}
+
+//ctx.strokeRect(8, 389, 100, 100); // for testing
+
+
+
+
+// Create a new Planck.js world with gravity
+var gravity = planck.Vec2(0, 981); // Define the gravity vector
+var world = planck.World(gravity);
+
+// Enable contact limits
+
+// Also try enabling deactivation 
+world.setWarmStarting(true);
+world.setContinuousPhysics(true);
 
 var boxes = [];
-var scale = 1;
 
-var createRect = function(x, y, w, h, isDynamic) {
-  isDynamic = (isDynamic === undefined) ? true : isDynamic;
-  var box = world.createBody()
-  if(isDynamic) {box.setDynamic();} else {
-    box.setStatic();
+function makeBox(x, y, w, h, prop, isStatic) {
+  if(isStatic) {
+    var temp = world.createBody(planck.Vec2(x+w/2, y+h/2))
+  } else {
+    var temp = world.createDynamicBody(planck.Vec2(x+w/2, y+h/2));
   }
-  box.createFixture(pl.Box(w, h));
-  box.setPosition(Vec2(x, y));
-  box.setAngle(Math.random()*Math.PI);
-  //console.log(box.m_fixtureList.m_shape.m_vertices);
-  boxes.push({
-    p: box,
-    w: w,
-    h: h
-  });
-}
-createRect(20, 100, 200, 20, false);
-for (var i = 0; i < 5; i++) {
-  var x = Math.random() * 80;
-  var y = Math.random() * 60;
-  var w = 50 + Math.random() * 10;
-  var h = 50 + Math.random() * 10;
-  createRect(x, y, w, h, true);
+  temp.createFixture(planck.Box(w, h, prop));
+  temp.angularVelocity = 1;
+  boxes.push(temp);
 }
 
-function draw() {
-  ctx.clearRect(0, 0, canvas.clientWidth, canvas.height);
-  for (var i = 0; i < boxes.length; i++) {
-    var box = boxes[i].p;
-    var pos = box.getPosition();
-    var ang = box.getAngle();
-    var width = boxes[i].w;
-    var height = boxes[i].h;
+// Create a dynamic box body
+makeBox(canvas.width/2, canvas.height, canvas.width, 30, {density: 1.0, friction: 0.5}, true);
+ctx.strokeStyle = 'red';
+ctx.lineWidth = 2;
 
-    ctx.fillStyle = "#FF0000";
-    ctx.save();
-    ctx.translate(pos.x/scale, pos.y/scale);
-    ctx.rotate(ang);
-    //console.log(ang);
+var testSizes = [];
+
+button.onclick = function() {
+  
+  text.innerHTML = ''; // byebye paragraph
+  var shiftL = 0;
+  words.forEach((word, i) => {
+    const span = document.createElement("span");
+    span.id = i;
     
-    ctx.fillRect(-width/2, height/2, width/2, height/2);
-    ctx.restore();
-    //requestAnimationFrame(draw);
+    span.textContent = word + ' '; // put the word in our new span
+    text.appendChild(span);
+    const bbox = span.getBoundingClientRect(); // create our bounding box
+    const x = bbox.x, y = bbox.y, w = bbox.width, h = bbox.height;
+    ctx.strokeRect(x, y, w, h);
+    span.style.left = x + "px";
+    span.style.top = y + "px";
+    makeBox(x, y, w, h, {density: 1.0, friction: 0.5, rustitution: 0.1}, false);
+    testSizes.push([w, h, x, y]);
+  });
+  const spans = text.querySelectorAll('span');
+  spans.forEach((span) => {
+    span.style.position = "absolute";
+  });
+  function update () {
+    world.step(1/30, 10, 3);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    testSizes.forEach((info, i) => {
+      var word = document.getElementById(i);
+      var pos = boxes[i].getPosition();
+      var ang = boxes[i].getAngle();
+      var x = pos.x, y = pos.y;
+      
+      ctx.strokeRect(x, y, info[0], info[1]);
+      word.style.left = x + "px";
+      word.style.top = y + "px";
+      
+      word.style.transform = 'rotate(' + -ang + 'rad)';
+      console.log(ang);
+    });
+    requestAnimationFrame(update);
   }
-}
-
-function animate() {
   update();
-  draw();
-  requestAnimationFrame(animate);
 }
 
-//var intervalId = setInterval(animate, 160)
+//////////////////////////
 
-animate();
+document.addEventListener('mousemove', mouseMoveHandler);
 
+let selectedBody; 
+
+function mouseMoveHandler(event) {
+
+  // Check for body under cursor
+  let body = getBodyAtWorldPoint(mousePosition);
+
+  if(body && !selectedBody) {
+    selectedBody = body;
+  }
+
+}
+document.addEventListener('mousedown', mouseDownHandler);
+
+function mouseDownHandler() {
+
+  if(selectedBody) {
+
+    let joint = world.createMouseJoint(selectedBody, {
+      target: mousePosition
+    });
+
+  }
+
+} 
+document.addEventListener('mouseup', mouseUpHandler);
+
+function mouseUpHandler() {
+  world.destroy(joint);
+  selectedBody = null;  
+}
+function getBodyAtWorldPoint(event) {
+
+}
+function mousePosition() {}
